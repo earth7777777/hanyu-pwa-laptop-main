@@ -30,7 +30,7 @@ type MetaData = Record<string, unknown> | null;
 type ApiSuccess = {
   ok: true;
   vision?: Record<string, unknown>;
-  draft?: string;
+  draft?: string | { name?: string;[key: string]: unknown };
   meta?: Record<string, unknown>;
 };
 
@@ -46,6 +46,24 @@ type ApiResponse = ApiSuccess | ApiFailure;
 const API_URL =
   '/api/method/hanyu_warehouse.api.v1.vision_to_draft.create_rm_inbound_draft_from_receipt';
 
+function getCsrfToken() {
+  const fromWindow =
+    typeof window !== 'undefined' &&
+      typeof (window as Window & { csrf_token?: string }).csrf_token === 'string'
+      ? (window as Window & { csrf_token?: string }).csrf_token
+      : '';
+
+  if (fromWindow) return fromWindow;
+
+  const fromMeta =
+    typeof document !== 'undefined'
+      ? document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? ''
+      : '';
+
+  if (fromMeta) return fromMeta;
+
+  return '';
+}
 export default function App() {
   const [status, setStatus] = useState<StatusState>('idle');
   const [isVisionCollapsed, setIsVisionCollapsed] = useState(false);
@@ -59,8 +77,15 @@ export default function App() {
   const [f03, setF03] = useState('');
   const [f04, setF04] = useState('');
   const [f05, setF05] = useState('');
+  const [f06, setF06] = useState('');
+  const [f07, setF07] = useState('');
   const [f08, setF08] = useState('');
-  const [f09, setF09] = useState('');
+  const [f09, setF09] = useState(() => {
+    const now = new Date();
+    const offset = now.getTimezoneOffset();
+    const local = new Date(now.getTime() - offset * 60 * 1000);
+    return local.toISOString().slice(0, 16);
+  });
   const [f10, setF10] = useState('');
   const [f11, setF11] = useState('');
 
@@ -76,12 +101,14 @@ export default function App() {
       f03: f03.trim(),
       f04: f04.trim(),
       f05: f05.trim(),
+      f06: f06.trim(),
+      f07: f07.trim(),
       f08: f08.trim(),
       f09: f09.trim(),
       f10: f10.trim(),
       f11: f11.trim(),
     }),
-    [f01, f02, f03, f04, f05, f08, f09, f10, f11]
+    [f01, f02, f03, f04, f05, f06, f07, f08, f09, f10, f11]
   );
 
   const prettyVision = useMemo(() => {
@@ -116,10 +143,14 @@ export default function App() {
     };
 
     try {
+      const csrfToken = getCsrfToken();
+
       const res = await fetch(API_URL, {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
+          'X-Frappe-CSRF-Token': csrfToken,
         },
         body: JSON.stringify(payload),
       });
@@ -139,7 +170,13 @@ export default function App() {
       if (data?.ok) {
         setStatus('ok');
         setVisionData(data.vision ?? null);
-        setDraftName(data.draft ?? '');
+        setDraftName(
+          typeof data.draft === 'string'
+            ? data.draft
+            : typeof data.draft === 'object' && data.draft !== null && 'name' in data.draft
+              ? String(data.draft.name ?? '')
+              : ''
+        );
         setMetaData(data.meta ?? null);
         return;
       }
@@ -324,12 +361,14 @@ export default function App() {
 
               <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
                 {[
-                  { id: 'f01', label: 'SYS.F01_MATERIAL', value: f01, set: setF01, placeholder: '物料' },
+                  { id: 'f01', label: 'SYS.F01_MATERIAL', value: f01, set: setF01, placeholder: '入库物料' },
                   { id: 'f02', label: 'SYS.F02_SUPPLIER', value: f02, set: setF02, placeholder: '供应商' },
                   { id: 'f03', label: 'SYS.F03_INVOICE_NO', value: f03, set: setF03, placeholder: '送货单号' },
-                  { id: 'f04', label: 'SYS.F04_GROSS_WEIGHT', value: f04, set: setF04, placeholder: '实测毛重吨' },
-                  { id: 'f05', label: 'SYS.F05_PACKAGE_QTY', value: f05, set: setF05, placeholder: '袋数' },
-                  { id: 'f11', label: 'SYS.F11_REMARKS', value: f11, set: setF11, placeholder: '备注' },
+                  { id: 'f04', label: 'SYS.F04_GROSS_WEIGHT', value: f04, set: setF04, placeholder: '实测毛重(吨)' },
+                  { id: 'f05', label: 'SYS.F05_PACKAGE_QTY', value: f05, set: setF05, placeholder: '包数/袋数' },
+                  { id: 'f06', label: 'SYS.F06_BATCH_NO', value: f06, set: setF06, placeholder: '厂家批号' },
+                  { id: 'f07', label: 'SYS.F07_PLATE_NO', value: f07, set: setF07, placeholder: '车牌号' },
+
                 ].map((field) => (
                   <div key={field.id} className="space-y-2">
                     <label className="font-mono text-[10px] text-slate-500 uppercase tracking-widest pl-1">
@@ -361,29 +400,43 @@ export default function App() {
 
                 <div className="space-y-2">
                   <label className="font-mono text-[10px] text-slate-500 uppercase tracking-widest pl-1">
-                    SYS.F09_RECEIPT_PHOTO
+                    SYS.F09_INPUT_TIME
                   </label>
                   <input
-                    type="text"
+                    type="datetime-local"
                     value={f09}
                     onChange={(e) => setF09(e.target.value)}
-                    placeholder="可手工覆盖签收照片"
                     className="w-full bg-slate-950 border-b border-slate-800 px-3 py-2 font-mono text-sm text-white focus:outline-none focus:border-cyan-500 focus:bg-slate-950/80 transition-colors"
                   />
                 </div>
 
                 <div className="space-y-2">
                   <label className="font-mono text-[10px] text-slate-500 uppercase tracking-widest pl-1">
-                    SYS.F10_EXCEPTION_REASON
+                    SYS.F10_DELIVERY_WEIGHT
                   </label>
                   <input
                     type="text"
                     value={f10}
                     onChange={(e) => setF10(e.target.value)}
-                    placeholder="可手工覆盖异常说明"
+                    placeholder="送货重量(吨)"
                     className="w-full bg-slate-950 border-b border-slate-800 px-3 py-2 font-mono text-sm text-white focus:outline-none focus:border-cyan-500 focus:bg-slate-950/80 transition-colors"
                   />
                 </div>
+
+                <div className="space-y-2">
+                  <label className="font-mono text-[10px] text-slate-500 uppercase tracking-widest pl-1">
+                    SYS.F11_REMARKS
+                  </label>
+                  <input
+                    type="text"
+                    value={f11}
+                    onChange={(e) => setF11(e.target.value)}
+                    placeholder="备注说明"
+                    className="w-full bg-slate-950 border-b border-slate-800 px-3 py-2 font-mono text-sm text-white focus:outline-none focus:border-cyan-500 focus:bg-slate-950/80 transition-colors"
+                  />
+                </div>
+
+
               </div>
             </section>
           </div>
