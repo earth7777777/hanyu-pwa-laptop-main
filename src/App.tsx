@@ -69,7 +69,8 @@ export default function App() {
   const [isVisionCollapsed, setIsVisionCollapsed] = useState(false);
   const [hasPhoto, setHasPhoto] = useState(false);
 
-  const [receiptPhoto, setReceiptPhoto] = useState('');
+  const [fileUrl, setFileUrl] = useState('');
+  const [uploading, setUploading] = useState(false);
   const [exceptionReason, setExceptionReason] = useState('');
 
   const [f01, setF01] = useState('');
@@ -121,6 +122,33 @@ export default function App() {
     return JSON.stringify(metaData, null, 2);
   }, [metaData]);
 
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const csrfToken = getCsrfToken();
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('is_private', '1');
+      const res = await fetch('/api/method/upload_file', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'X-Frappe-CSRF-Token': csrfToken },
+        body: formData,
+      });
+      const raw = await res.json();
+      const data = raw?.message ?? raw;
+      if (res.ok && data?.file_url) {
+        setFileUrl(data.file_url);
+      }
+    } catch {
+      // upload failed
+    } finally {
+      setUploading(false);
+    }
+  }
+
   async function handleSubmit() {
     const finalExceptionReason = hasPhoto ? exceptionReason.trim() : exceptionReason.trim();
 
@@ -137,7 +165,7 @@ export default function App() {
     setMetaData(null);
 
     const payload = {
-      receipt_photo: hasPhoto ? receiptPhoto.trim() : '',
+      receipt_photo: hasPhoto ? fileUrl : '',
       exception_reason: finalExceptionReason,
       overrides,
     };
@@ -254,12 +282,15 @@ export default function App() {
                     <label className="font-mono text-[10px] text-cyan-500 uppercase tracking-widest">
                       RECEIPT_PHOTO
                     </label>
-                    <textarea
-                      value={receiptPhoto}
-                      onChange={(e) => setReceiptPhoto(e.target.value)}
-                      placeholder="先用文本占位。后续再接真实上传。"
-                      className="w-full bg-slate-950 border border-slate-800 rounded px-4 py-3 font-mono text-sm text-slate-300 focus:outline-none focus:border-cyan-800 focus:ring-1 focus:ring-cyan-900 transition-all min-h-[100px] resize-none placeholder:text-slate-700"
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      onChange={handleFileUpload}
+                      className="w-full bg-slate-950 border border-slate-800 rounded px-4 py-3 font-mono text-sm text-slate-300 focus:outline-none focus:border-cyan-800 focus:ring-1 focus:ring-cyan-900 transition-all"
                     />
+                    {uploading && <p className="font-mono text-xs text-cyan-400">上传中...</p>}
+                    {fileUrl && <p className="font-mono text-xs text-emerald-400">已上传: {fileUrl}</p>}
                   </div>
                 ) : (
                   <div className="border border-slate-800 border-dashed bg-slate-950/50 rounded-lg p-6">
