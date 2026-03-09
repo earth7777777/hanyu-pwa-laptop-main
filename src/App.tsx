@@ -45,6 +45,88 @@ type ApiResponse = ApiSuccess | ApiFailure;
 
 const API_URL =
   '/api/method/hanyu_warehouse.api.v1.vision_to_draft.create_rm_inbound_draft_from_receipt';
+const PALLET_CREATE_OR_GET_API = '/api/method/hanyu_warehouse.api.v1.pallet.create_or_get';
+const PALLET_GET_BY_CODE_API = '/api/method/hanyu_warehouse.api.v1.pallet.get_by_code';
+const PALLET_GENERATE_LABEL_API =
+  '/api/method/hanyu_warehouse.api.v1.pallet.generate_label_payload';
+const RM_INBOUND_ATTACH_PALLET_API =
+  '/api/method/hanyu_warehouse.api.v1.rm_inbound.attach_pallet';
+
+type JsonRecord = Record<string, unknown>;
+
+function asRecord(value: unknown): JsonRecord | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  return value as JsonRecord;
+}
+
+function toDisplayRecord(value: unknown): JsonRecord {
+  const record = asRecord(value);
+  return record ?? { value };
+}
+
+function extractBackendError(value: unknown) {
+  const record = asRecord(value);
+  if (!record) return '';
+
+  const directError = record.error;
+  if (typeof directError === 'string' && directError.trim()) return directError.trim();
+
+  const message = record.message;
+  if (typeof message === 'string' && message.trim()) return message.trim();
+
+  const serverMessages = record._server_messages;
+  if (typeof serverMessages === 'string' && serverMessages.trim()) {
+    try {
+      const parsed = JSON.parse(serverMessages) as unknown;
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const first = parsed[0];
+        if (typeof first === 'string' && first.trim()) return first.trim();
+      }
+    } catch {
+      return serverMessages;
+    }
+  }
+
+  const exception = record.exception;
+  if (typeof exception === 'string' && exception.trim()) return exception.trim();
+
+  return '';
+}
+
+function resolvePalletId(value: unknown) {
+  const topLevel = asRecord(value);
+  const candidate = topLevel?.pallet ?? value;
+  const record = asRecord(candidate);
+  if (!record) return '';
+
+  const idValue = record.pallet_id ?? record.name ?? record.id;
+  return typeof idValue === 'string' ? idValue : '';
+}
+
+async function callJsonMethod(path: string, payload: JsonRecord) {
+  const csrfToken = getCsrfToken();
+  const res = await fetch(path, {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Frappe-CSRF-Token': csrfToken,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const raw = await res.json();
+  const data = raw?.message ?? raw;
+  const record = asRecord(data);
+  const okFlag = !record || !('ok' in record) || record.ok !== false;
+
+  return {
+    ok: res.ok && okFlag,
+    status: res.status,
+    data,
+    backendError: extractBackendError(data),
+  };
+}
 
 function getCsrfToken() {
   const fromWindow =
@@ -94,11 +176,20 @@ export default function App() {
   const [f14, setF14] = useState('');
   const [f15, setF15] = useState('');
   const [f16, setF16] = useState('');
+  const [f17, setF17] = useState('');
 
   const [visionData, setVisionData] = useState<VisionData>(null);
   const [draftName, setDraftName] = useState('');
   const [metaData, setMetaData] = useState<MetaData>(null);
   const [errorText, setErrorText] = useState('');
+
+  const [palletCode, setPalletCode] = useState('');
+  const [palletBusy, setPalletBusy] = useState(false);
+  const [palletAction, setPalletAction] = useState('');
+  const [palletError, setPalletError] = useState('');
+  const [palletLookupResult, setPalletLookupResult] = useState<JsonRecord | null>(null);
+  const [palletLabelResult, setPalletLabelResult] = useState<JsonRecord | null>(null);
+  const [palletAttachResult, setPalletAttachResult] = useState<JsonRecord | null>(null);
 
   const overrides = useMemo(
     () => ({
@@ -118,8 +209,9 @@ export default function App() {
       f14: f14.trim(),
       f15: f15.trim(),
       f16: f16.trim(),
+      f17: f17.trim(),
     }),
-    [f01, f02, f03, f04, f05, f06, f07, f08, f09, f10, f11, f12, f13, f14, f15, f16]
+    [f01, f02, f03, f04, f05, f06, f07, f08, f09, f10, f11, f12, f13, f14, f15, f16, f17]
   );
 
   const prettyVision = useMemo(() => {
@@ -131,6 +223,21 @@ export default function App() {
     if (!metaData) return '// NO_META_DATA';
     return JSON.stringify(metaData, null, 2);
   }, [metaData]);
+
+  const prettyPalletLookup = useMemo(() => {
+    if (!palletLookupResult) return '// NO_PALLET_RESULT';
+    return JSON.stringify(palletLookupResult, null, 2);
+  }, [palletLookupResult]);
+
+  const prettyPalletLabel = useMemo(() => {
+    if (!palletLabelResult) return '// NO_LABEL_PAYLOAD';
+    return JSON.stringify(palletLabelResult, null, 2);
+  }, [palletLabelResult]);
+
+  const prettyPalletAttach = useMemo(() => {
+    if (!palletAttachResult) return '// NO_ATTACH_RESULT';
+    return JSON.stringify(palletAttachResult, null, 2);
+  }, [palletAttachResult]);
 
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -156,6 +263,125 @@ export default function App() {
       // upload failed
     } finally {
       setUploading(false);
+    }
+  }
+
+  async function handleCreateOrGetPallet() {
+    const code = palletCode.trim();
+    if (!code) {
+      setPalletError('PALLET_CODE_REQUIRED');
+      return;
+    }
+
+    setPalletBusy(true);
+    setPalletAction('create_or_get');
+    setPalletError('');
+    try {
+      const result = await callJsonMethod(PALLET_CREATE_OR_GET_API, { pallet_code: code });
+      if (!result.ok) {
+        setPalletError(result.backendError || `HTTP ${result.status}`);
+        return;
+      }
+
+      setPalletLookupResult(toDisplayRecord(result.data));
+      const palletId = resolvePalletId(result.data);
+      if (palletId) setF17(palletId);
+    } catch (err) {
+      setPalletError(err instanceof Error ? err.message : 'PALLET_CREATE_OR_GET_FAILED');
+    } finally {
+      setPalletBusy(false);
+      setPalletAction('');
+    }
+  }
+
+  async function handleGetPalletByCode() {
+    const code = palletCode.trim();
+    if (!code) {
+      setPalletError('PALLET_CODE_REQUIRED');
+      return;
+    }
+
+    setPalletBusy(true);
+    setPalletAction('get_by_code');
+    setPalletError('');
+    try {
+      const result = await callJsonMethod(PALLET_GET_BY_CODE_API, { pallet_code: code });
+      if (!result.ok) {
+        setPalletError(result.backendError || `HTTP ${result.status}`);
+        return;
+      }
+
+      setPalletLookupResult(toDisplayRecord(result.data));
+      const palletId = resolvePalletId(result.data);
+      if (palletId) setF17(palletId);
+    } catch (err) {
+      setPalletError(err instanceof Error ? err.message : 'PALLET_GET_BY_CODE_FAILED');
+    } finally {
+      setPalletBusy(false);
+      setPalletAction('');
+    }
+  }
+
+  async function handleGeneratePalletLabelPayload() {
+    const code = palletCode.trim();
+    const palletId = f17.trim();
+    if (!code && !palletId) {
+      setPalletError('PALLET_CODE_OR_ID_REQUIRED');
+      return;
+    }
+
+    setPalletBusy(true);
+    setPalletAction('generate_label_payload');
+    setPalletError('');
+    try {
+      const payload: JsonRecord = {};
+      if (code) payload.pallet_code = code;
+      if (palletId) payload.pallet_id = palletId;
+
+      const result = await callJsonMethod(PALLET_GENERATE_LABEL_API, payload);
+      if (!result.ok) {
+        setPalletError(result.backendError || `HTTP ${result.status}`);
+        return;
+      }
+
+      setPalletLabelResult(toDisplayRecord(result.data));
+    } catch (err) {
+      setPalletError(err instanceof Error ? err.message : 'PALLET_LABEL_FAILED');
+    } finally {
+      setPalletBusy(false);
+      setPalletAction('');
+    }
+  }
+
+  async function handleAttachPalletToDraft() {
+    const draft = draftName.trim();
+    const palletId = f17.trim();
+    if (!draft || !palletId) return;
+
+    setPalletBusy(true);
+    setPalletAction('attach_pallet');
+    setPalletError('');
+    try {
+      const payload: JsonRecord = {
+        draft_name: draft,
+        pallet_id: palletId,
+        f17: palletId,
+      };
+      const code = palletCode.trim();
+      if (code) payload.pallet_code = code;
+
+      const result = await callJsonMethod(RM_INBOUND_ATTACH_PALLET_API, payload);
+      if (!result.ok) {
+        setPalletError(result.backendError);
+        return;
+      }
+
+      setPalletAttachResult(toDisplayRecord(result.data));
+    } catch (err) {
+      setPalletError(err instanceof Error ? err.message : 'PALLET_ATTACH_FAILED');
+    } finally {
+      setPalletBusy(false);
+      setPalletAction('');
     }
   }
 
@@ -305,7 +531,7 @@ export default function App() {
                       className="w-full bg-slate-950 border border-slate-800 rounded px-4 py-3 font-mono text-sm text-slate-300 focus:outline-none focus:border-cyan-800 focus:ring-1 focus:ring-cyan-900 transition-all"
                     />
                     {uploading && <p className="font-mono text-xs text-cyan-400">上传中...</p>}
-                    {fileUrl && <p className="font-mono text-xs text-emerald-400">已上传: {fileUrl}</p>}
+                    {fileUrl && <p className="font-mono text-xs text-emerald-400">已上传：{fileUrl}</p>}
                   </div>
                 ) : (
                   <div className="border border-slate-800 border-dashed bg-slate-950/50 rounded-lg p-6">
@@ -614,6 +840,109 @@ export default function App() {
                 <div className="flex items-center gap-3">
                   <span className="font-mono text-xs text-slate-500 tracking-wider">05</span>
                   <h2 className="text-sm font-medium tracking-wide text-white flex items-center gap-2">
+                    <QrCode className="w-4 h-4 text-slate-400" />
+                    PALLET_BLOCK
+                  </h2>
+                </div>
+              </div>
+
+              <div className="p-5 space-y-4">
+                <div className="space-y-2">
+                  <label className="font-mono text-[10px] text-slate-500 uppercase tracking-widest">
+                    PALLET_CODE
+                  </label>
+                  <input
+                    type="text"
+                    value={palletCode}
+                    onChange={(e) => setPalletCode(e.target.value)}
+                    placeholder="scan or input pallet code"
+                    className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 font-mono text-sm text-white focus:outline-none focus:border-cyan-500"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={handleCreateOrGetPallet}
+                    disabled={palletBusy}
+                    className="rounded border border-cyan-800/50 bg-cyan-950/20 px-2 py-2 font-mono text-[10px] uppercase tracking-widest text-cyan-200 disabled:opacity-50"
+                  >
+                    CREATE_OR_GET
+                  </button>
+                  <button
+                    onClick={handleGetPalletByCode}
+                    disabled={palletBusy}
+                    className="rounded border border-slate-700 bg-slate-900 px-2 py-2 font-mono text-[10px] uppercase tracking-widest text-slate-300 disabled:opacity-50"
+                  >
+                    GET_BY_CODE
+                  </button>
+                  <button
+                    onClick={handleGeneratePalletLabelPayload}
+                    disabled={palletBusy}
+                    className="rounded border border-slate-700 bg-slate-900 px-2 py-2 font-mono text-[10px] uppercase tracking-widest text-slate-300 disabled:opacity-50"
+                  >
+                    GENERATE_LABEL
+                  </button>
+                  <button
+                    onClick={handleAttachPalletToDraft}
+                    disabled={palletBusy || !draftName.trim() || !f17.trim()}
+                    className="rounded border border-emerald-800/60 bg-emerald-950/20 px-2 py-2 font-mono text-[10px] uppercase tracking-widest text-emerald-300 disabled:opacity-50"
+                  >
+                    ATTACH_PALLET
+                  </button>
+                </div>
+
+                <div className="rounded border border-slate-800 bg-slate-950 p-3 space-y-1">
+                  <p className="font-mono text-[10px] text-slate-500 uppercase tracking-widest">
+                    RM_INBOUND_DRAFT
+                  </p>
+                  <p className="font-mono text-xs text-slate-300 break-all">{draftName || 'NOT_READY'}</p>
+                  <p className="font-mono text-[10px] text-slate-500 uppercase tracking-widest mt-2">F17_PALLET_ID</p>
+                  <p className="font-mono text-xs text-slate-300 break-all">{f17 || 'EMPTY'}</p>
+                </div>
+
+                {palletAction && (
+                  <p className="font-mono text-xs text-cyan-300">running: {palletAction}</p>
+                )}
+                {!!palletError && (
+                  <p className="font-mono text-xs text-rose-300 break-words">{palletError}</p>
+                )}
+
+                <div className="rounded border border-slate-800 bg-slate-950 p-3">
+                  <p className="font-mono text-[10px] text-slate-500 uppercase tracking-widest mb-2">
+                    PALLET_RESULT
+                  </p>
+                  <pre className="font-mono text-xs text-slate-300 leading-relaxed whitespace-pre-wrap break-words overflow-x-auto">
+                    {prettyPalletLookup}
+                  </pre>
+                </div>
+
+                <div className="rounded border border-slate-800 bg-slate-950 p-3">
+                  <p className="font-mono text-[10px] text-slate-500 uppercase tracking-widest mb-2">
+                    LABEL_PAYLOAD
+                  </p>
+                  <pre className="font-mono text-xs text-slate-300 leading-relaxed whitespace-pre-wrap break-words overflow-x-auto">
+                    {prettyPalletLabel}
+                  </pre>
+                </div>
+
+                <div className="rounded border border-slate-800 bg-slate-950 p-3">
+                  <p className="font-mono text-[10px] text-slate-500 uppercase tracking-widest mb-2">
+                    ATTACH_RESULT
+                  </p>
+                  <pre className="font-mono text-xs text-slate-300 leading-relaxed whitespace-pre-wrap break-words overflow-x-auto">
+                    {prettyPalletAttach}
+                  </pre>
+                </div>
+              </div>
+            </section>
+
+            <section className="bg-slate-900/50 rounded-xl border border-slate-800 overflow-hidden relative group">
+              <div className="absolute top-0 left-0 w-1 h-full bg-slate-700 group-hover:bg-cyan-500 transition-colors duration-500" />
+
+              <div className="p-5 border-b border-slate-800/50">
+                <div className="flex items-center gap-3">
+                  <span className="font-mono text-xs text-slate-500 tracking-wider">06</span>
+                  <h2 className="text-sm font-medium tracking-wide text-white flex items-center gap-2">
                     {status === 'loading' ? (
                       <Loader2 className="w-4 h-4 text-cyan-400 animate-spin" />
                     ) : status === 'ok' ? (
@@ -645,7 +974,7 @@ export default function App() {
                   )}
 
                   {status === 'loading' && (
-                    <p className="text-sm text-cyan-300">正在调用桥接口并创建草稿...</p>
+                    <p className="text-sm text-cyan-300">正在调用桥接接口并创建草稿...</p>
                   )}
 
                   {status === 'ok' && (
