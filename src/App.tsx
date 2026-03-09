@@ -89,6 +89,11 @@ export default function App() {
   });
   const [f10, setF10] = useState('');
   const [f11, setF11] = useState('');
+  const [f12, setF12] = useState('');
+  const [f13, setF13] = useState('');
+  const [f14, setF14] = useState('');
+  const [f15, setF15] = useState('');
+  const [f16, setF16] = useState('');
 
   const [visionData, setVisionData] = useState<VisionData>(null);
   const [draftName, setDraftName] = useState('');
@@ -108,8 +113,13 @@ export default function App() {
       f09: f09.trim(),
       f10: f10.trim(),
       f11: f11.trim(),
+      f12: f12.trim(),
+      f13: f13.trim(),
+      f14: f14.trim(),
+      f15: f15.trim(),
+      f16: f16.trim(),
     }),
-    [f01, f02, f03, f04, f05, f06, f07, f08, f09, f10, f11]
+    [f01, f02, f03, f04, f05, f06, f07, f08, f09, f10, f11, f12, f13, f14, f15, f16]
   );
 
   const prettyVision = useMemo(() => {
@@ -157,6 +167,11 @@ export default function App() {
       setErrorText('未上传照片时，必须填写异常说明。');
       return;
     }
+
+    if (f15.trim() && !window.confirm(`已填写内部批次号：${f15.trim()}，确认提交？`)) {
+      return;
+    }
+
 
     setStatus('loading');
     setErrorText('');
@@ -463,6 +478,75 @@ export default function App() {
                     value={f11}
                     onChange={(e) => setF11(e.target.value)}
                     placeholder="备注说明"
+                    className="w-full bg-slate-950 border-b border-slate-800 px-3 py-2 font-mono text-sm text-white focus:outline-none focus:border-cyan-500 focus:bg-slate-950/80 transition-colors"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="font-mono text-[10px] text-slate-500 uppercase tracking-widest pl-1">
+                    SYS.F12_EXT_BAG_CODE
+                  </label>
+                  <input
+                    type="text"
+                    value={f12}
+                    onChange={(e) => setF12(e.target.value)}
+                    placeholder="外部袋码 / 条码"
+                    className="w-full bg-slate-950 border-b border-slate-800 px-3 py-2 font-mono text-sm text-white focus:outline-none focus:border-cyan-500 focus:bg-slate-950/80 transition-colors"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="font-mono text-[10px] text-slate-500 uppercase tracking-widest pl-1">
+                    SYS.F13_SOURCE_TYPE
+                  </label>
+                  <select
+                    value={f13}
+                    onChange={(e) => setF13(e.target.value)}
+                    className="w-full bg-slate-950 border-b border-slate-800 px-3 py-2 font-mono text-sm text-white focus:outline-none focus:border-cyan-500 focus:bg-slate-950/80 transition-colors"
+                  >
+                    <option value="">-- 来源类型 --</option>
+                    <option value="新料">新料</option>
+                    <option value="回料">回料</option>
+                  </select>
+                </div>
+
+                {f13 === '回料' && (
+                  <div className="space-y-2">
+                    <label className="font-mono text-[10px] text-slate-500 uppercase tracking-widest pl-1">
+                      SYS.F14_REGRIND_CLASS
+                    </label>
+                    <input
+                      type="text"
+                      value={f14}
+                      onChange={(e) => setF14(e.target.value)}
+                      placeholder="回料分类"
+                      className="w-full bg-slate-950 border-b border-slate-800 px-3 py-2 font-mono text-sm text-white focus:outline-none focus:border-cyan-500 focus:bg-slate-950/80 transition-colors"
+                    />
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <label className="font-mono text-[10px] text-slate-500 uppercase tracking-widest pl-1">
+                    SYS.F15_INTERNAL_BATCH
+                  </label>
+                  <input
+                    type="text"
+                    value={f15}
+                    onChange={(e) => setF15(e.target.value)}
+                    placeholder="内部批次号"
+                    className="w-full bg-slate-950 border-b border-slate-800 px-3 py-2 font-mono text-sm text-white focus:outline-none focus:border-cyan-500 focus:bg-slate-950/80 transition-colors"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="font-mono text-[10px] text-slate-500 uppercase tracking-widest pl-1">
+                    SYS.F16_PKG_TRACK
+                  </label>
+                  <input
+                    type="text"
+                    value={f16}
+                    onChange={(e) => setF16(e.target.value)}
+                    placeholder="包级追踪标记"
                     className="w-full bg-slate-950 border-b border-slate-800 px-3 py-2 font-mono text-sm text-white focus:outline-none focus:border-cyan-500 focus:bg-slate-950/80 transition-colors"
                   />
                 </div>
