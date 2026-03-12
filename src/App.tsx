@@ -34,6 +34,7 @@ const API_PREFIX = '/api/method/hanyu_warehouse.api.v1.';
 const CONTRACT_VERSION = 'v1';
 const LEGACY_INBOUND_API =
   '/api/method/hanyu_warehouse.api.v1.vision_to_draft.create_rm_inbound_draft_from_receipt';
+const EVIDENCE_STORAGE_KEY = 'hanyu_s5_evidence_log';
 
 const VALIDATION_CASES: ValidationCase[] = [
   {
@@ -297,6 +298,43 @@ function newSummaryLine(): SummaryLine {
   };
 }
 
+function isEvidenceEntry(value: unknown): value is EvidenceEntry {
+  const record = asRecord(value);
+  return (
+    !!record &&
+    typeof record.id === 'string' &&
+    typeof record.action === 'string' &&
+    typeof record.method === 'string' &&
+    typeof record.ok === 'boolean' &&
+    typeof record.time === 'string' &&
+    !!asRecord(record.request) &&
+    typeof record.error === 'string' &&
+    'response' in record
+  );
+}
+
+function loadEvidenceLogFromStorage(): EvidenceEntry[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(EVIDENCE_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(isEvidenceEntry);
+  } catch {
+    return [];
+  }
+}
+
+function saveEvidenceLogToStorage(entries: EvidenceEntry[]) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(EVIDENCE_STORAGE_KEY, JSON.stringify(entries));
+  } catch {
+    // Keep UI usable even if localStorage is blocked.
+  }
+}
+
 export default function App() {
   const [globalStatus, setGlobalStatus] = useState<Status>('idle');
   const [globalHint, setGlobalHint] = useState('');
@@ -330,7 +368,7 @@ export default function App() {
   const [legacyF16, setLegacyF16] = useState('');
   const [legacyF17, setLegacyF17] = useState('');
 
-  const [evidenceLog, setEvidenceLog] = useState<EvidenceEntry[]>([]);
+  const [evidenceLog, setEvidenceLog] = useState<EvidenceEntry[]>(() => loadEvidenceLogFromStorage());
 
   const [palletCode, setPalletCode] = useState('');
   const [palletIdF17, setPalletIdF17] = useState('');
@@ -426,7 +464,11 @@ export default function App() {
       time: new Date().toISOString(),
     };
 
-    setEvidenceLog((prev) => [entry, ...prev]);
+    setEvidenceLog((prev) => {
+      const next = [entry, ...prev];
+      saveEvidenceLogToStorage(next);
+      return next;
+    });
     return entry.id;
   }
 
