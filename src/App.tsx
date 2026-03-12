@@ -38,43 +38,43 @@ const LEGACY_INBOUND_API =
 const VALIDATION_CASES: ValidationCase[] = [
   {
     id: 'case-1',
-    title: 'Case 1 - coded outbound',
-    expectation: 'Pallet path works and submit/post succeeds.',
+    title: '用例 1 - 托盘出库',
+    expectation: '托盘路径可用，提交并过账成功。',
   },
   {
     id: 'case-2',
-    title: 'Case 2 - manual outbound',
-    expectation: 'Manual submit works and source_location_id is required.',
+    title: '用例 2 - 手工出库',
+    expectation: '手工提交流程可用，且 source_location_id 必填。',
   },
   {
     id: 'case-3',
-    title: 'Case 3 - insufficient stock',
-    expectation: 'INSUFFICIENT_STOCK is surfaced clearly.',
+    title: '用例 3 - 库存不足',
+    expectation: '能够清晰展示 INSUFFICIENT_STOCK。',
   },
   {
     id: 'case-4',
-    title: 'Case 4 - machine required',
-    expectation: 'Missing machine is blocked when machine-required is enabled.',
+    title: '用例 4 - 机台必填',
+    expectation: '启用机台必填时，缺少 machine_id 会被拦截。',
   },
   {
     id: 'case-5',
-    title: 'Case 5 - destination reroute',
-    expectation: 'Reroute shows readable from->to trace and keeps quantity unchanged.',
+    title: '用例 5 - 去向改派',
+    expectation: '改派结果可读 from->to 追踪，且数量保持不变。',
   },
   {
     id: 'case-6',
-    title: 'Case 6 - recycle batch identity',
-    expectation: 'Recycle summary submit generates selectable recycle batches.',
+    title: '用例 6 - 回收批次标识',
+    expectation: '回收汇总提交后可生成可选择的回收批次。',
   },
   {
     id: 'case-7',
-    title: 'Case 7 - repeated recycle process',
-    expectation: 'Same batch can apply repeated process events and show accumulated cost.',
+    title: '用例 7 - 重复回收加工',
+    expectation: '同一批次可重复提交加工事件并展示累计成本。',
   },
   {
     id: 'case-8',
-    title: 'Case 8 - recycle scrap closing',
-    expectation: 'Recycle scrap closes the batch and shows loss amount from backend.',
+    title: '用例 8 - 回收报废关单',
+    expectation: '回收报废可关闭批次，并展示后端返回的 loss_amount。',
   },
 ];
 
@@ -273,6 +273,19 @@ function statusBadge(status: Status) {
   return 'text-slate-300 border-slate-700 bg-slate-900';
 }
 
+function statusText(status: Status) {
+  if (status === 'idle') return '空闲';
+  if (status === 'loading') return '处理中';
+  if (status === 'ok') return '成功';
+  return '错误';
+}
+
+function validationStatusText(status: 'pending' | 'pass' | 'fail') {
+  if (status === 'pending') return '待处理';
+  if (status === 'pass') return '通过';
+  return '失败';
+}
+
 function newSummaryLine(): SummaryLine {
   return {
     id: makeId('line'),
@@ -433,14 +446,14 @@ export default function App() {
     const hasPallet = !!palletIdF17.trim() || !!palletCode.trim();
 
     if (!hasPallet) {
-      if (!itemCode.trim()) return 'item_code is required for manual outbound';
-      if (!batchNo.trim()) return 'batch_no is required for manual outbound';
-      if (!qty.trim()) return 'qty is required for manual outbound';
-      if (!sourceLocationId.trim()) return 'source_location_id is required for manual outbound';
+      if (!itemCode.trim()) return '手工出库时 item_code 必填';
+      if (!batchNo.trim()) return '手工出库时 batch_no 必填';
+      if (!qty.trim()) return '手工出库时 qty 必填';
+      if (!sourceLocationId.trim()) return '手工出库时 source_location_id 必填';
     }
 
     if (machineRequired && !machineId.trim()) {
-      return 'machine_id is required when machine-required is enabled';
+      return '启用机台必填时，machine_id 必填';
     }
 
     return '';
@@ -468,14 +481,14 @@ export default function App() {
   async function handlePalletLookup() {
     const code = palletCode.trim();
     if (!code) {
-      setPalletError('pallet_code is required');
+      setPalletError('pallet_code 必填');
       return;
     }
 
     setPalletBusy(true);
     setPalletError('');
     setGlobalStatus('loading');
-    setGlobalHint('Running pallet.get_by_code ...');
+    setGlobalHint('正在调用 pallet.get_by_code ...');
 
     try {
       const result = await callMethod('pallet.get_by_code', { pallet_code: code }, { httpMethod: 'GET' });
@@ -493,7 +506,7 @@ export default function App() {
       if (!result.ok) {
         setGlobalStatus('error');
         setPalletError(`${result.errorCode || 'ERROR'} ${result.errorMessage}`.trim());
-        setGlobalHint(`Evidence saved: ${evidenceId}`);
+        setGlobalHint(`证据已保存：${evidenceId}`);
         return;
       }
 
@@ -501,15 +514,15 @@ export default function App() {
       if (palletId) setPalletIdF17(palletId);
 
       const contractHint = result.contractVersion
-        ? `response contract_version=${result.contractVersion}`
-        : 'response contract_version missing';
+        ? `响应 contract_version=${result.contractVersion}`
+        : '响应缺少 contract_version';
 
       setGlobalStatus('ok');
-      setGlobalHint(`Pallet lookup ok, ${contractHint}, evidence: ${evidenceId}`);
+      setGlobalHint(`托盘查询成功，${contractHint}，证据：${evidenceId}`);
     } catch (err) {
       setGlobalStatus('error');
-      setPalletError(err instanceof Error ? err.message : 'pallet.get_by_code failed');
-      setGlobalHint('pallet.get_by_code failed before response parse');
+      setPalletError(err instanceof Error ? err.message : 'pallet.get_by_code 调用失败');
+      setGlobalHint('pallet.get_by_code 在响应解析前失败');
     } finally {
       setPalletBusy(false);
     }
@@ -527,7 +540,7 @@ export default function App() {
     setOutboundBusy(true);
     setOutboundError('');
     setGlobalStatus('loading');
-    setGlobalHint('Running rm_outbound.create_draft ...');
+    setGlobalHint('正在调用 rm_outbound.create_draft ...');
 
     try {
       const payload = buildOutboundPayload();
@@ -547,7 +560,7 @@ export default function App() {
       if (!result.ok) {
         setGlobalStatus('error');
         setOutboundError(`${result.errorCode || 'ERROR'} ${result.errorMessage}`.trim());
-        setGlobalHint(`Evidence saved: ${evidenceId}`);
+        setGlobalHint(`证据已保存：${evidenceId}`);
         return;
       }
 
@@ -557,15 +570,15 @@ export default function App() {
       }
 
       const contractHint = result.contractVersion
-        ? `response contract_version=${result.contractVersion}`
-        : 'response contract_version missing';
+        ? `响应 contract_version=${result.contractVersion}`
+        : '响应缺少 contract_version';
 
       setGlobalStatus('ok');
-      setGlobalHint(`Outbound draft created, ${contractHint}, evidence: ${evidenceId}`);
+      setGlobalHint(`出库草稿已创建，${contractHint}，证据：${evidenceId}`);
     } catch (err) {
       setGlobalStatus('error');
-      setOutboundError(err instanceof Error ? err.message : 'rm_outbound.create_draft failed');
-      setGlobalHint('rm_outbound.create_draft failed before response parse');
+      setOutboundError(err instanceof Error ? err.message : 'rm_outbound.create_draft 调用失败');
+      setGlobalHint('rm_outbound.create_draft 在响应解析前失败');
     } finally {
       setOutboundBusy(false);
     }
@@ -580,7 +593,7 @@ export default function App() {
       const outboundName = outboundDraftName.trim();
 
       if (!outboundName) {
-        const message = 'rm_outbound draft name is required before submit/post';
+        const message = '提交/过账前必须填写 rm_outbound 草稿单号';
         setOutboundError(message);
         setGlobalStatus('error');
         setGlobalHint(message);
@@ -604,10 +617,10 @@ export default function App() {
 
       if (!submitResult.ok) {
         const errorLabel = submitResult.errorCode || 'ERROR';
-        const suffix = submitResult.errorCode === 'INSUFFICIENT_STOCK' ? ' (clear backend stock error)' : '';
+        const suffix = submitResult.errorCode === 'INSUFFICIENT_STOCK' ? '（后端库存错误已清晰透出）' : '';
         setGlobalStatus('error');
         setOutboundError(`${errorLabel} ${submitResult.errorMessage}${suffix}`.trim());
-        setGlobalHint(`Evidence saved: ${evidenceId}`);
+        setGlobalHint(`证据已保存：${evidenceId}`);
         return;
       }
 
@@ -617,15 +630,15 @@ export default function App() {
       }
 
       const contractHint = submitResult.contractVersion
-        ? `response contract_version=${submitResult.contractVersion}`
-        : 'response contract_version missing';
+        ? `响应 contract_version=${submitResult.contractVersion}`
+        : '响应缺少 contract_version';
 
       setGlobalStatus('ok');
-      setGlobalHint(`Submit/post success, ${contractHint}, evidence: ${evidenceId}`);
+      setGlobalHint(`提交/过账成功，${contractHint}，证据：${evidenceId}`);
     } catch (err) {
       setGlobalStatus('error');
-      setOutboundError(err instanceof Error ? err.message : 'rm_outbound.submit_and_post failed');
-      setGlobalHint('rm_outbound.submit_and_post failed before response parse');
+      setOutboundError(err instanceof Error ? err.message : 'rm_outbound.submit_and_post 调用失败');
+      setGlobalHint('rm_outbound.submit_and_post 在响应解析前失败');
     } finally {
       setOutboundBusy(false);
     }
@@ -637,22 +650,22 @@ export default function App() {
     const reason = rerouteReason.trim();
 
     if (!outboundId) {
-      setRerouteError('submitted outbound record is required');
+      setRerouteError('submitted outbound 记录必填');
       return;
     }
     if (!toMachine) {
-      setRerouteError('new machine is required');
+      setRerouteError('new machine 必填');
       return;
     }
     if (!reason) {
-      setRerouteError('reason is required');
+      setRerouteError('reason 必填');
       return;
     }
 
     setRerouteBusy(true);
     setRerouteError('');
     setGlobalStatus('loading');
-    setGlobalHint('Running rm_outbound.reroute ...');
+    setGlobalHint('正在调用 rm_outbound.reroute ...');
 
     try {
       const payload: JsonRecord = {
@@ -679,20 +692,20 @@ export default function App() {
       if (!result.ok) {
         setGlobalStatus('error');
         setRerouteError(`${result.errorCode || 'ERROR'} ${result.errorMessage}`.trim());
-        setGlobalHint(`Evidence saved: ${evidenceId}`);
+        setGlobalHint(`证据已保存：${evidenceId}`);
         return;
       }
 
       const contractHint = result.contractVersion
-        ? `response contract_version=${result.contractVersion}`
-        : 'response contract_version missing';
+        ? `响应 contract_version=${result.contractVersion}`
+        : '响应缺少 contract_version';
 
       setGlobalStatus('ok');
-      setGlobalHint(`Reroute success (trace action), ${contractHint}, evidence: ${evidenceId}`);
+      setGlobalHint(`改派成功（仅追踪动作），${contractHint}，证据：${evidenceId}`);
     } catch (err) {
       setGlobalStatus('error');
-      setRerouteError(err instanceof Error ? err.message : 'rm_outbound.reroute failed');
-      setGlobalHint('rm_outbound.reroute failed before response parse');
+      setRerouteError(err instanceof Error ? err.message : 'rm_outbound.reroute 调用失败');
+      setGlobalHint('rm_outbound.reroute 在响应解析前失败');
     } finally {
       setRerouteBusy(false);
     }
@@ -713,12 +726,12 @@ export default function App() {
   }
 
   function validateSummaryInput() {
-    if (!summaryMachineId.trim()) return 'machine_id is required';
-    if (!summaryShift.trim()) return 'shift is required';
-    if (!summaryPostingDate.trim()) return 'date/posting_date is required';
+    if (!summaryMachineId.trim()) return 'machine_id 必填';
+    if (!summaryShift.trim()) return 'shift 必填';
+    if (!summaryPostingDate.trim()) return 'date/posting_date 必填';
 
     const lines = buildSummaryLinesPayload();
-    if (!lines.length) return 'at least one recycle summary line is required';
+    if (!lines.length) return '至少需要一条 recycle summary 行';
 
     return '';
   }
@@ -733,7 +746,7 @@ export default function App() {
     setSummaryBusy(true);
     setSummaryError('');
     setGlobalStatus('loading');
-    setGlobalHint('Running recycle_summary.create_draft ...');
+    setGlobalHint('正在调用 recycle_summary.create_draft ...');
 
     try {
       const payload: JsonRecord = {
@@ -757,7 +770,7 @@ export default function App() {
       if (!result.ok) {
         setGlobalStatus('error');
         setSummaryError(`${result.errorCode || 'ERROR'} ${result.errorMessage}`.trim());
-        setGlobalHint(`Evidence saved: ${evidenceId}`);
+        setGlobalHint(`证据已保存：${evidenceId}`);
         return;
       }
 
@@ -765,15 +778,15 @@ export default function App() {
       if (name) setSummaryName(name);
 
       const contractHint = result.contractVersion
-        ? `response contract_version=${result.contractVersion}`
-        : 'response contract_version missing';
+        ? `响应 contract_version=${result.contractVersion}`
+        : '响应缺少 contract_version';
 
       setGlobalStatus('ok');
-      setGlobalHint(`Recycle summary draft created, ${contractHint}, evidence: ${evidenceId}`);
+      setGlobalHint(`回收汇总草稿已创建，${contractHint}，证据：${evidenceId}`);
     } catch (err) {
       setGlobalStatus('error');
-      setSummaryError(err instanceof Error ? err.message : 'recycle_summary.create_draft failed');
-      setGlobalHint('recycle_summary.create_draft failed before response parse');
+      setSummaryError(err instanceof Error ? err.message : 'recycle_summary.create_draft 调用失败');
+      setGlobalHint('recycle_summary.create_draft 在响应解析前失败');
     } finally {
       setSummaryBusy(false);
     }
@@ -815,15 +828,15 @@ export default function App() {
           setSummaryResult(createResult.data);
           setSummaryError(`${createResult.errorCode || 'ERROR'} ${createResult.errorMessage}`.trim());
           setGlobalStatus('error');
-          setGlobalHint(`Auto summary draft failed, evidence: ${createEvidenceId}`);
+          setGlobalHint(`自动创建汇总草稿失败，证据：${createEvidenceId}`);
           return;
         }
 
         recycleSummaryId = extractDocName(createResult.data, 'recycle_summary');
         if (!recycleSummaryId) {
-          setSummaryError('Cannot resolve recycle_summary name from create_draft response');
+          setSummaryError('无法从 create_draft 响应中解析 recycle_summary 名称');
           setGlobalStatus('error');
-          setGlobalHint(`Auto summary draft missing name, evidence: ${createEvidenceId}`);
+          setGlobalHint(`自动创建汇总草稿缺少名称，证据：${createEvidenceId}`);
           return;
         }
 
@@ -848,7 +861,7 @@ export default function App() {
       if (!result.ok) {
         setSummaryError(`${result.errorCode || 'ERROR'} ${result.errorMessage}`.trim());
         setGlobalStatus('error');
-        setGlobalHint(`Evidence saved: ${evidenceId}`);
+        setGlobalHint(`证据已保存：${evidenceId}`);
         return;
       }
 
@@ -863,24 +876,24 @@ export default function App() {
       }
 
       const contractHint = result.contractVersion
-        ? `response contract_version=${result.contractVersion}`
-        : 'response contract_version missing';
+        ? `响应 contract_version=${result.contractVersion}`
+        : '响应缺少 contract_version';
 
       setGlobalStatus('ok');
-      setGlobalHint(`Recycle batches generated, ${contractHint}, evidence: ${evidenceId}`);
+      setGlobalHint(`回收批次已生成，${contractHint}，证据：${evidenceId}`);
     } catch (err) {
-      setSummaryError(err instanceof Error ? err.message : 'recycle_summary.submit_and_generate_batches failed');
+      setSummaryError(err instanceof Error ? err.message : 'recycle_summary.submit_and_generate_batches 调用失败');
       setGlobalStatus('error');
-      setGlobalHint('recycle_summary.submit_and_generate_batches failed before response parse');
+      setGlobalHint('recycle_summary.submit_and_generate_batches 在响应解析前失败');
     } finally {
       setSummaryBusy(false);
     }
   }
 
   function validateProcessInput() {
-    if (!processBatchId.trim()) return 'recycle_batch_id is required';
-    if (!processType.trim()) return 'process_type is required';
-    if (!processTotalCost.trim()) return 'total_cost is required';
+    if (!processBatchId.trim()) return 'recycle_batch_id 必填';
+    if (!processType.trim()) return 'process_type 必填';
+    if (!processTotalCost.trim()) return 'total_cost 必填';
     return '';
   }
 
@@ -894,7 +907,7 @@ export default function App() {
     setProcessBusy(true);
     setProcessError('');
     setGlobalStatus('loading');
-    setGlobalHint('Running recycle_process.create_draft ...');
+    setGlobalHint('正在调用 recycle_process.create_draft ...');
 
     try {
       const result = await callMethod('recycle_process.create_draft', {
@@ -918,7 +931,7 @@ export default function App() {
       if (!result.ok) {
         setProcessError(`${result.errorCode || 'ERROR'} ${result.errorMessage}`.trim());
         setGlobalStatus('error');
-        setGlobalHint(`Evidence saved: ${evidenceId}`);
+        setGlobalHint(`证据已保存：${evidenceId}`);
         return;
       }
 
@@ -928,15 +941,15 @@ export default function App() {
       setGeneratedBatches((prev) => Array.from(new Set([processBatchId.trim(), ...prev])));
 
       const contractHint = result.contractVersion
-        ? `response contract_version=${result.contractVersion}`
-        : 'response contract_version missing';
+        ? `响应 contract_version=${result.contractVersion}`
+        : '响应缺少 contract_version';
 
       setGlobalStatus('ok');
-      setGlobalHint(`Recycle process draft created, ${contractHint}, evidence: ${evidenceId}`);
+      setGlobalHint(`回收加工草稿已创建，${contractHint}，证据：${evidenceId}`);
     } catch (err) {
-      setProcessError(err instanceof Error ? err.message : 'recycle_process.create_draft failed');
+      setProcessError(err instanceof Error ? err.message : 'recycle_process.create_draft 调用失败');
       setGlobalStatus('error');
-      setGlobalHint('recycle_process.create_draft failed before response parse');
+      setGlobalHint('recycle_process.create_draft 在响应解析前失败');
     } finally {
       setProcessBusy(false);
     }
@@ -979,15 +992,15 @@ export default function App() {
           setProcessResult(createResult.data);
           setProcessError(`${createResult.errorCode || 'ERROR'} ${createResult.errorMessage}`.trim());
           setGlobalStatus('error');
-          setGlobalHint(`Auto process draft failed, evidence: ${createEvidenceId}`);
+          setGlobalHint(`自动创建加工草稿失败，证据：${createEvidenceId}`);
           return;
         }
 
         recycleProcessId = extractDocName(createResult.data, 'recycle_process');
         if (!recycleProcessId) {
-          setProcessError('Cannot resolve recycle_process name from create_draft response');
+          setProcessError('无法从 create_draft 响应中解析 recycle_process 名称');
           setGlobalStatus('error');
-          setGlobalHint(`Auto process draft missing name, evidence: ${createEvidenceId}`);
+          setGlobalHint(`自动创建加工草稿缺少名称，证据：${createEvidenceId}`);
           return;
         }
 
@@ -1012,7 +1025,7 @@ export default function App() {
       if (!result.ok) {
         setProcessError(`${result.errorCode || 'ERROR'} ${result.errorMessage}`.trim());
         setGlobalStatus('error');
-        setGlobalHint(`Evidence saved: ${evidenceId}`);
+        setGlobalHint(`证据已保存：${evidenceId}`);
         return;
       }
 
@@ -1023,15 +1036,15 @@ export default function App() {
       }
 
       const contractHint = result.contractVersion
-        ? `response contract_version=${result.contractVersion}`
-        : 'response contract_version missing';
+        ? `响应 contract_version=${result.contractVersion}`
+        : '响应缺少 contract_version';
 
       setGlobalStatus('ok');
-      setGlobalHint(`Recycle process applied, ${contractHint}, evidence: ${evidenceId}`);
+      setGlobalHint(`回收加工已应用，${contractHint}，证据：${evidenceId}`);
     } catch (err) {
-      setProcessError(err instanceof Error ? err.message : 'recycle_process.submit_and_apply failed');
+      setProcessError(err instanceof Error ? err.message : 'recycle_process.submit_and_apply 调用失败');
       setGlobalStatus('error');
-      setGlobalHint('recycle_process.submit_and_apply failed before response parse');
+      setGlobalHint('recycle_process.submit_and_apply 在响应解析前失败');
     } finally {
       setProcessBusy(false);
     }
@@ -1042,19 +1055,19 @@ export default function App() {
     const reason = scrapReason.trim();
 
     if (!batchId) {
-      setScrapError('recycle_batch_id is required');
+      setScrapError('recycle_batch_id 必填');
       return;
     }
 
     if (!reason) {
-      setScrapError('reason is required');
+      setScrapError('reason 必填');
       return;
     }
 
     setScrapBusy(true);
     setScrapError('');
     setGlobalStatus('loading');
-    setGlobalHint('Running recycle_scrap.submit_and_close ...');
+    setGlobalHint('正在调用 recycle_scrap.submit_and_close ...');
 
     try {
       const result = await callMethod('recycle_scrap.submit_and_close', {
@@ -1076,7 +1089,7 @@ export default function App() {
       if (!result.ok) {
         setScrapError(`${result.errorCode || 'ERROR'} ${result.errorMessage}`.trim());
         setGlobalStatus('error');
-        setGlobalHint(`Evidence saved: ${evidenceId}`);
+        setGlobalHint(`证据已保存：${evidenceId}`);
         return;
       }
 
@@ -1087,15 +1100,15 @@ export default function App() {
       }
 
       const contractHint = result.contractVersion
-        ? `response contract_version=${result.contractVersion}`
-        : 'response contract_version missing';
+        ? `响应 contract_version=${result.contractVersion}`
+        : '响应缺少 contract_version';
 
       setGlobalStatus('ok');
-      setGlobalHint(`Recycle scrap closed by official path, ${contractHint}, evidence: ${evidenceId}`);
+      setGlobalHint(`回收报废已通过官方路径关闭，${contractHint}，证据：${evidenceId}`);
     } catch (err) {
-      setScrapError(err instanceof Error ? err.message : 'recycle_scrap.submit_and_close failed');
+      setScrapError(err instanceof Error ? err.message : 'recycle_scrap.submit_and_close 调用失败');
       setGlobalStatus('error');
-      setGlobalHint('recycle_scrap.submit_and_close failed before response parse');
+      setGlobalHint('recycle_scrap.submit_and_close 在响应解析前失败');
     } finally {
       setScrapBusy(false);
     }
@@ -1124,10 +1137,10 @@ export default function App() {
       if (res.ok && data?.file_url) {
         setLegacyReceiptPhoto(data.file_url);
       } else {
-        setLegacyError('photo upload failed');
+        setLegacyError('照片上传失败');
       }
     } catch {
-      setLegacyError('photo upload failed');
+      setLegacyError('照片上传失败');
     } finally {
       setLegacyUploading(false);
       e.currentTarget.value = '';
@@ -1143,13 +1156,13 @@ export default function App() {
 
     if (!f01 || !f02 || !f08) {
       setLegacyStatus('error');
-      setLegacyError('f01, f02, f08 are required');
+      setLegacyError('f01、f02、f08 必填');
       return;
     }
 
     if (!receiptPhoto && !exceptionReason) {
       setLegacyStatus('error');
-      setLegacyError('receipt_photo or exception_reason is required');
+      setLegacyError('receipt_photo 或 exception_reason 必填');
       return;
     }
 
@@ -1205,7 +1218,7 @@ export default function App() {
       setLegacyMeta(dataRecord?.meta ?? null);
     } catch (err) {
       setLegacyStatus('error');
-      setLegacyError(err instanceof Error ? err.message : 'legacy inbound submit failed');
+      setLegacyError(err instanceof Error ? err.message : '传统入库提交失败');
     }
   }
 
@@ -1213,20 +1226,20 @@ export default function App() {
     <div className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-8">
       <div className="max-w-6xl mx-auto space-y-6">
         <header className="rounded-lg border border-slate-800 bg-slate-900/70 p-4 md:p-6">
-          <h1 className="text-xl md:text-2xl font-semibold">Batch 4 - S5 Frontend Closure Console</h1>
+          <h1 className="text-xl md:text-2xl font-semibold">Batch 4 - S5 前端收口控制台</h1>
           <p className="text-sm text-slate-400 mt-1">
-            Outbound + reroute + recycle + adversarial validation (frontend only).
+            出库 + 改派 + 回收 + 对抗验证（仅前端）。
           </p>
           <div className="mt-3 flex flex-wrap items-center gap-3">
             <span className={`px-3 py-1 rounded border text-xs uppercase tracking-wider ${statusBadge(globalStatus)}`}>
-              status: {globalStatus}
+              状态：{statusText(globalStatus)}
             </span>
-            <span className="text-xs text-slate-300">{globalHint || 'Ready'}</span>
+            <span className="text-xs text-slate-300">{globalHint || '就绪'}</span>
           </div>
         </header>
 
         <section className="rounded-lg border border-slate-800 bg-slate-900/70 p-4 md:p-6 space-y-3">
-          <p className="text-sm text-slate-300">PWA Entry</p>
+          <p className="text-sm text-slate-300">PWA 入口</p>
           <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setActiveView('legacy')}
@@ -1236,7 +1249,7 @@ export default function App() {
                   : 'border-slate-700 bg-slate-900 text-slate-300'
               }`}
             >
-              Legacy Inbound
+              传统入库
             </button>
             <button
               onClick={() => setActiveView('s5')}
@@ -1246,7 +1259,7 @@ export default function App() {
                   : 'border-slate-700 bg-slate-900 text-slate-300'
               }`}
             >
-              S5 Console
+              S5 控制台
             </button>
           </div>
         </section>
@@ -1255,15 +1268,15 @@ export default function App() {
           <>
 
         <section className="rounded-lg border border-slate-800 bg-slate-900/70 p-4 md:p-6 space-y-4">
-          <h2 className="text-lg font-medium">A. Outbound Page</h2>
+          <h2 className="text-lg font-medium">A. 出库页面</h2>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="text-sm text-slate-300">Scan Area - pallet_code</label>
+              <label className="text-sm text-slate-300">扫码区 - 托盘编码（pallet_code）</label>
               <input
                 value={palletCode}
                 onChange={(e) => setPalletCode(e.target.value)}
-                placeholder="scan pallet code"
+                placeholder="扫描托盘码"
                 className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2"
               />
               <div className="flex gap-2">
@@ -1272,12 +1285,12 @@ export default function App() {
                   disabled={palletBusy}
                   className="rounded border border-cyan-700 bg-cyan-950/40 px-3 py-2 text-sm disabled:opacity-50"
                 >
-                  {palletBusy ? 'Looking up...' : 'pallet.get_by_code'}
+                  {palletBusy ? '查询中...' : 'pallet.get_by_code'}
                 </button>
                 <input
                   value={palletIdF17}
                   onChange={(e) => setPalletIdF17(e.target.value)}
-                  placeholder="f17 / pallet_id"
+                  placeholder="f17 / 托盘ID（pallet_id）"
                   className="flex-1 rounded border border-slate-700 bg-slate-950 px-3 py-2"
                 />
               </div>
@@ -1285,74 +1298,74 @@ export default function App() {
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm text-slate-300">Manual Fallback Area (no pallet)</label>
+              <label className="text-sm text-slate-300">手工兜底区（无托盘）</label>
               <input
                 value={itemCode}
                 onChange={(e) => setItemCode(e.target.value)}
-                placeholder="item_code"
+                placeholder="物料编码（item_code）"
                 className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2"
               />
               <input
                 value={batchNo}
                 onChange={(e) => setBatchNo(e.target.value)}
-                placeholder="batch_no"
+                placeholder="批次号（batch_no）"
                 className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2"
               />
               <div className="grid grid-cols-2 gap-2">
                 <input
                   value={qty}
                   onChange={(e) => setQty(e.target.value)}
-                  placeholder="qty"
+                  placeholder="数量（qty）"
                   className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2"
                 />
                 <input
                   value={uom}
                   onChange={(e) => setUom(e.target.value)}
-                  placeholder="uom"
+                  placeholder="单位（uom）"
                   className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2"
                 />
               </div>
               <input
                 value={sourceLocationId}
                 onChange={(e) => setSourceLocationId(e.target.value)}
-                placeholder="source_location_id (required for manual)"
+                placeholder="来源库位（source_location_id，手工必填）"
                 className="w-full rounded border border-amber-700 bg-slate-950 px-3 py-2"
               />
               <p className="text-xs text-amber-300">
-                Manual outbound requires source_location_id before submit.
+                手工出库在提交前必须填写 source_location_id。
               </p>
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="text-sm text-slate-300">Destination Area</label>
+              <label className="text-sm text-slate-300">去向区</label>
               <input
                 value={machineId}
                 onChange={(e) => setMachineId(e.target.value)}
-                placeholder="machine_id"
+                placeholder="机台（machine_id）"
                 className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2"
               />
               <input
                 value={workOrderId}
                 onChange={(e) => setWorkOrderId(e.target.value)}
-                placeholder="work_order_id"
+                placeholder="工单（work_order_id）"
                 className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2"
               />
               <input
                 value={purpose}
                 onChange={(e) => setPurpose(e.target.value)}
-                placeholder="purpose"
+                placeholder="用途（purpose）"
                 className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2"
               />
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm text-slate-300">Submit Area</label>
+              <label className="text-sm text-slate-300">提交区</label>
               <input
                 value={outboundDraftName}
                 onChange={(e) => setOutboundDraftName(e.target.value)}
-                placeholder="rm_outbound draft name (required for submit/post)"
+                placeholder="出库草稿单号（rm_outbound，提交/过账必填）"
                 className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2"
               />
               <input
@@ -1367,7 +1380,7 @@ export default function App() {
                   checked={machineRequired}
                   onChange={(e) => setMachineRequired(e.target.checked)}
                 />
-                machine_id required on frontend (config-driven guard)
+                前端要求机台必填（machine_id，配置驱动校验）
               </label>
               <div className="flex flex-wrap gap-2">
                 <button
@@ -1375,45 +1388,45 @@ export default function App() {
                   disabled={outboundBusy}
                   className="rounded border border-slate-700 bg-slate-800 px-3 py-2 text-sm disabled:opacity-50"
                 >
-                  {outboundBusy ? 'Working...' : 'Create Draft'}
+                  {outboundBusy ? '处理中...' : '创建草稿'}
                 </button>
                 <button
                   onClick={handleOutboundSubmitAndPost}
                   disabled={outboundBusy}
                   className="rounded border border-emerald-700 bg-emerald-950/40 px-3 py-2 text-sm disabled:opacity-50"
                 >
-                  {outboundBusy ? 'Posting...' : 'Submit and Post'}
+                  {outboundBusy ? '过账中...' : '提交并过账'}
                 </button>
               </div>
-              <p className="text-xs text-slate-400">No frontend stock simulation. Backend is source of truth.</p>
+              <p className="text-xs text-slate-400">前端不做库存模拟，后端是唯一事实来源。</p>
             </div>
           </div>
 
           <div className="rounded border border-slate-800 bg-slate-950 p-3 space-y-2">
-            <p className="text-xs text-slate-400">Outbound draft name: {outboundDraftName || 'none'}</p>
+            <p className="text-xs text-slate-400">出库草稿单号：{outboundDraftName || '无'}</p>
             {outboundError && <p className="text-sm text-rose-300">{outboundError}</p>}
             <pre className="text-xs overflow-auto">{pretty(outboundResult)}</pre>
           </div>
 
           <div className="rounded border border-slate-800 bg-slate-950 p-3">
-            <p className="text-xs text-slate-400 mb-2">pallet.get_by_code response snapshot</p>
+            <p className="text-xs text-slate-400 mb-2">pallet.get_by_code 响应快照</p>
             <pre className="text-xs overflow-auto">{pretty(palletResult)}</pre>
           </div>
         </section>
 
         <section className="rounded-lg border border-slate-800 bg-slate-900/70 p-4 md:p-6 space-y-4">
-          <h2 className="text-lg font-medium">B. Destination Reroute Entry</h2>
-          <p className="text-sm text-slate-400">Trace action only. Quantity is not editable here.</p>
+          <h2 className="text-lg font-medium">B. 去向改派入口</h2>
+          <p className="text-sm text-slate-400">这里只做追踪动作，数量不可编辑。</p>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="text-sm text-slate-300">submitted outbound selector</label>
+              <label className="text-sm text-slate-300">已提交出库单选择</label>
               <select
                 value={rerouteOutboundId}
                 onChange={(e) => setRerouteOutboundId(e.target.value)}
                 className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2"
               >
-                <option value="">-- select submitted outbound --</option>
+                <option value="">-- 选择已提交出库单 --</option>
                 {submittedOutboundIds.map((name) => (
                   <option key={name} value={name}>
                     {name}
@@ -1423,35 +1436,35 @@ export default function App() {
               <input
                 value={rerouteOutboundId}
                 onChange={(e) => setRerouteOutboundId(e.target.value)}
-                placeholder="or input rm_outbound name"
+                placeholder="或输入出库单号（rm_outbound）"
                 className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2"
               />
               <input
                 value={rerouteToMachineId}
                 onChange={(e) => setRerouteToMachineId(e.target.value)}
-                placeholder="new machine_id"
+                placeholder="新的机台（machine_id）"
                 className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2"
               />
               <textarea
                 value={rerouteReason}
                 onChange={(e) => setRerouteReason(e.target.value)}
-                placeholder="reason"
+                placeholder="原因"
                 className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 min-h-[90px]"
               />
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm text-slate-300">optional target fields</label>
+              <label className="text-sm text-slate-300">可选目标字段</label>
               <input
                 value={rerouteToWorkOrderId}
                 onChange={(e) => setRerouteToWorkOrderId(e.target.value)}
-                placeholder="to_work_order_id"
+                placeholder="目标工单（to_work_order_id）"
                 className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2"
               />
               <input
                 value={rerouteToPurpose}
                 onChange={(e) => setRerouteToPurpose(e.target.value)}
-                placeholder="to_purpose"
+                placeholder="目标用途（to_purpose）"
                 className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2"
               />
 
@@ -1460,11 +1473,11 @@ export default function App() {
                 disabled={rerouteBusy}
                 className="rounded border border-cyan-700 bg-cyan-950/40 px-3 py-2 text-sm disabled:opacity-50"
               >
-                {rerouteBusy ? 'Submitting...' : 'Submit reroute'}
+                {rerouteBusy ? '提交中...' : '提交改派'}
               </button>
 
               {rerouteError && <p className="text-sm text-rose-300">{rerouteError}</p>}
-              <p className="text-xs text-slate-400">Result should show readable from-&gt;to trace from backend response.</p>
+              <p className="text-xs text-slate-400">结果应展示后端返回的可读 from-&gt;to 追踪信息。</p>
             </div>
           </div>
 
@@ -1474,21 +1487,21 @@ export default function App() {
         </section>
 
         <section className="rounded-lg border border-slate-800 bg-slate-900/70 p-4 md:p-6 space-y-4">
-          <h2 className="text-lg font-medium">C. Recycle Page</h2>
+          <h2 className="text-lg font-medium">C. 回收页面</h2>
 
           <div className="rounded border border-slate-800 bg-slate-950 p-3 space-y-4">
-            <h3 className="font-medium">C1. Recycle Summary Entry</h3>
+            <h3 className="font-medium">C1. 回收汇总录入</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
               <input
                 value={summaryMachineId}
                 onChange={(e) => setSummaryMachineId(e.target.value)}
-                placeholder="machine_id"
+                placeholder="机台（machine_id）"
                 className="rounded border border-slate-700 bg-slate-900 px-3 py-2"
               />
               <input
                 value={summaryShift}
                 onChange={(e) => setSummaryShift(e.target.value)}
-                placeholder="shift"
+                placeholder="班次"
                 className="rounded border border-slate-700 bg-slate-900 px-3 py-2"
               />
               <input
@@ -1502,14 +1515,14 @@ export default function App() {
             <textarea
               value={summaryRemarks}
               onChange={(e) => setSummaryRemarks(e.target.value)}
-              placeholder="remarks (optional)"
+              placeholder="备注（可选）"
               className="w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 min-h-[70px]"
             />
 
             <div className="space-y-3">
               {summaryLines.map((line, idx) => (
                 <div key={line.id} className="rounded border border-slate-700 bg-slate-900 p-3 space-y-2">
-                  <p className="text-xs text-slate-400">line {idx + 1}</p>
+                  <p className="text-xs text-slate-400">第 {idx + 1} 行</p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                     <input
                       value={line.source_item_code}
@@ -1518,7 +1531,7 @@ export default function App() {
                           prev.map((x) => (x.id === line.id ? { ...x, source_item_code: e.target.value } : x))
                         )
                       }
-                      placeholder="source_item_code"
+                      placeholder="来源物料编码（source_item_code）"
                       className="rounded border border-slate-700 bg-slate-950 px-3 py-2"
                     />
                     <input
@@ -1528,7 +1541,7 @@ export default function App() {
                           prev.map((x) => (x.id === line.id ? { ...x, grade_usability: e.target.value } : x))
                         )
                       }
-                      placeholder="grade_usability"
+                      placeholder="可用等级（grade_usability）"
                       className="rounded border border-slate-700 bg-slate-950 px-3 py-2"
                     />
                     <input
@@ -1538,7 +1551,7 @@ export default function App() {
                           prev.map((x) => (x.id === line.id ? { ...x, qty: e.target.value } : x))
                         )
                       }
-                      placeholder="qty"
+                      placeholder="数量（qty）"
                       className="rounded border border-slate-700 bg-slate-950 px-3 py-2"
                     />
                     <input
@@ -1548,7 +1561,7 @@ export default function App() {
                           prev.map((x) => (x.id === line.id ? { ...x, source_batch_no: e.target.value } : x))
                         )
                       }
-                      placeholder="source_batch_no (optional)"
+                      placeholder="来源批次号（source_batch_no，可选）"
                       className="rounded border border-slate-700 bg-slate-950 px-3 py-2"
                     />
                   </div>
@@ -1559,7 +1572,7 @@ export default function App() {
                         prev.map((x) => (x.id === line.id ? { ...x, remarks: e.target.value } : x))
                       )
                     }
-                    placeholder="remarks (optional)"
+                    placeholder="备注（可选）"
                     className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2"
                   />
                   <button
@@ -1567,7 +1580,7 @@ export default function App() {
                     disabled={summaryLines.length <= 1}
                     className="rounded border border-slate-700 px-2 py-1 text-xs disabled:opacity-50"
                   >
-                    Remove line
+                    删除该行
                   </button>
                 </div>
               ))}
@@ -1578,38 +1591,38 @@ export default function App() {
                 onClick={() => setSummaryLines((prev) => [...prev, newSummaryLine()])}
                 className="rounded border border-slate-700 px-3 py-2 text-sm"
               >
-                Add line
+                新增一行
               </button>
               <button
                 onClick={handleSummaryCreateDraft}
                 disabled={summaryBusy}
                 className="rounded border border-slate-700 bg-slate-800 px-3 py-2 text-sm disabled:opacity-50"
               >
-                {summaryBusy ? 'Working...' : 'Create Draft'}
+                  {summaryBusy ? '处理中...' : '创建草稿'}
               </button>
               <button
                 onClick={handleSummarySubmitAndGenerate}
                 disabled={summaryBusy}
                 className="rounded border border-emerald-700 bg-emerald-950/40 px-3 py-2 text-sm disabled:opacity-50"
               >
-                {summaryBusy ? 'Submitting...' : 'Submit and Generate Batches'}
+                  {summaryBusy ? '提交中...' : '提交并生成批次'}
               </button>
             </div>
 
-            <p className="text-xs text-slate-400">recycle_summary name: {summaryName || 'none'}</p>
+            <p className="text-xs text-slate-400">recycle_summary 单号：{summaryName || '无'}</p>
             {summaryError && <p className="text-sm text-rose-300">{summaryError}</p>}
             <pre className="text-xs overflow-auto">{pretty(summaryResult)}</pre>
           </div>
 
           <div className="rounded border border-slate-800 bg-slate-950 p-3 space-y-3">
-            <h3 className="font-medium">C2. Recycle Process Entry</h3>
+            <h3 className="font-medium">C2. 回收加工录入</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               <select
                 value={processBatchId}
                 onChange={(e) => setProcessBatchId(e.target.value)}
                 className="rounded border border-slate-700 bg-slate-900 px-3 py-2"
               >
-                <option value="">-- select recycle batch --</option>
+                <option value="">-- 选择回收批次 --</option>
                 {batchOptions.map((name) => (
                   <option key={name} value={name}>
                     {name}
@@ -1619,59 +1632,59 @@ export default function App() {
               <input
                 value={processBatchId}
                 onChange={(e) => setProcessBatchId(e.target.value)}
-                placeholder="or input recycle_batch_id"
+                placeholder="或输入回收批次ID（recycle_batch_id）"
                 className="rounded border border-slate-700 bg-slate-900 px-3 py-2"
               />
               <input
                 value={processType}
                 onChange={(e) => setProcessType(e.target.value)}
-                placeholder="process_type"
+                placeholder="处理类型（process_type）"
                 className="rounded border border-slate-700 bg-slate-900 px-3 py-2"
               />
               <input
                 value={processTotalCost}
                 onChange={(e) => setProcessTotalCost(e.target.value)}
-                placeholder="total_cost (required)"
+                placeholder="总成本（total_cost，必填）"
                 className="rounded border border-amber-700 bg-slate-900 px-3 py-2"
               />
             </div>
             <textarea
               value={processRemarks}
               onChange={(e) => setProcessRemarks(e.target.value)}
-              placeholder="remarks (optional)"
+              placeholder="备注（可选）"
               className="w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 min-h-[70px]"
             />
-            <p className="text-xs text-slate-400">cost_breakdown is intentionally not required in Batch 4.</p>
+            <p className="text-xs text-slate-400">Batch 4 阶段有意不要求 cost_breakdown。</p>
             <div className="flex flex-wrap gap-2">
               <button
                 onClick={handleProcessCreateDraft}
                 disabled={processBusy}
                 className="rounded border border-slate-700 bg-slate-800 px-3 py-2 text-sm disabled:opacity-50"
               >
-                {processBusy ? 'Working...' : 'Create Draft'}
+                  {processBusy ? '处理中...' : '创建草稿'}
               </button>
               <button
                 onClick={handleProcessSubmitAndApply}
                 disabled={processBusy}
                 className="rounded border border-emerald-700 bg-emerald-950/40 px-3 py-2 text-sm disabled:opacity-50"
               >
-                {processBusy ? 'Applying...' : 'Submit and Apply'}
+                  {processBusy ? '应用中...' : '提交并应用'}
               </button>
             </div>
-            <p className="text-xs text-slate-400">recycle_process name: {processName || 'none'}</p>
+            <p className="text-xs text-slate-400">recycle_process 单号：{processName || '无'}</p>
             {processError && <p className="text-sm text-rose-300">{processError}</p>}
             <pre className="text-xs overflow-auto">{pretty(processResult)}</pre>
           </div>
 
           <div className="rounded border border-slate-800 bg-slate-950 p-3 space-y-3">
-            <h3 className="font-medium">C3. Recycle Scrap Entry</h3>
+            <h3 className="font-medium">C3. 回收报废录入</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               <select
                 value={scrapBatchId}
                 onChange={(e) => setScrapBatchId(e.target.value)}
                 className="rounded border border-slate-700 bg-slate-900 px-3 py-2"
               >
-                <option value="">-- select recycle batch --</option>
+                <option value="">-- 选择回收批次 --</option>
                 {batchOptions.map((name) => (
                   <option key={name} value={name}>
                     {name}
@@ -1681,7 +1694,7 @@ export default function App() {
               <input
                 value={scrapBatchId}
                 onChange={(e) => setScrapBatchId(e.target.value)}
-                placeholder="or input recycle_batch_id"
+                placeholder="或输入回收批次ID（recycle_batch_id）"
                 className="rounded border border-slate-700 bg-slate-900 px-3 py-2"
               />
             </div>
@@ -1689,7 +1702,7 @@ export default function App() {
             <textarea
               value={scrapReason}
               onChange={(e) => setScrapReason(e.target.value)}
-              placeholder="reason"
+              placeholder="原因"
               className="w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 min-h-[70px]"
             />
 
@@ -1698,19 +1711,19 @@ export default function App() {
               disabled={scrapBusy}
               className="rounded border border-emerald-700 bg-emerald-950/40 px-3 py-2 text-sm disabled:opacity-50"
             >
-              {scrapBusy ? 'Closing...' : 'Submit and Close'}
+                  {scrapBusy ? '关闭中...' : '提交并关闭'}
             </button>
 
-            <p className="text-xs text-slate-400">Official close path only: recycle_scrap.submit_and_close.</p>
+            <p className="text-xs text-slate-400">仅允许官方关闭路径：recycle_scrap.submit_and_close。</p>
             {scrapError && <p className="text-sm text-rose-300">{scrapError}</p>}
             <pre className="text-xs overflow-auto">{pretty(scrapResult)}</pre>
           </div>
         </section>
 
         <section className="rounded-lg border border-slate-800 bg-slate-900/70 p-4 md:p-6 space-y-4">
-          <h2 className="text-lg font-medium">D. Full-Chain Adversarial Validation + Evidence</h2>
+          <h2 className="text-lg font-medium">D. 全链路对抗验证与证据</h2>
           <p className="text-sm text-slate-400">
-            Use the tracker below to record pass/fail and bind each case to an evidence entry id.
+            使用下方跟踪区记录通过/失败，并将每个用例绑定到证据条目 ID。
           </p>
 
           <div className="space-y-3">
@@ -1732,7 +1745,7 @@ export default function App() {
                             : 'border-slate-700 bg-slate-900 text-slate-300'
                       }`}
                     >
-                      {status}
+                      {validationStatusText(status)}
                     </span>
                   </div>
 
@@ -1742,7 +1755,7 @@ export default function App() {
                       onChange={(e) => updateValidationEvidence(item.id, e.target.value)}
                       className="rounded border border-slate-700 bg-slate-900 px-3 py-2"
                     >
-                      <option value="">-- select evidence id --</option>
+                      <option value="">-- 选择证据编号 --</option>
                       {evidenceLog.map((ev) => (
                         <option key={ev.id} value={ev.id}>
                           {ev.id} | {ev.action}
@@ -1755,13 +1768,13 @@ export default function App() {
                         onClick={() => updateValidationStatus(item.id, 'pass')}
                         className="rounded border border-emerald-700 bg-emerald-950/40 px-3 py-2 text-sm"
                       >
-                        Mark pass
+                        标记通过
                       </button>
                       <button
                         onClick={() => updateValidationStatus(item.id, 'fail')}
                         className="rounded border border-rose-700 bg-rose-950/40 px-3 py-2 text-sm"
                       >
-                        Mark fail
+                        标记失败
                       </button>
                     </div>
                   </div>
@@ -1769,7 +1782,7 @@ export default function App() {
                   <textarea
                     value={validationNoteMap[item.id] || ''}
                     onChange={(e) => updateValidationNote(item.id, e.target.value)}
-                    placeholder="notes / screenshot path / record id"
+                    placeholder="备注 / 截图路径 / 记录编号"
                     className="w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 min-h-[70px]"
                   />
                 </div>
@@ -1778,22 +1791,22 @@ export default function App() {
           </div>
 
           <div className="rounded border border-slate-800 bg-slate-950 p-3 space-y-2">
-            <p className="font-medium">Evidence Log (request/response snapshots)</p>
+            <p className="font-medium">证据日志（请求/响应快照）</p>
             <div className="max-h-[420px] overflow-auto space-y-3">
-              {evidenceLog.length === 0 && <p className="text-sm text-slate-400">No evidence yet.</p>}
+              {evidenceLog.length === 0 && <p className="text-sm text-slate-400">暂无证据。</p>}
               {evidenceLog.map((entry) => (
                 <div key={entry.id} className="rounded border border-slate-700 bg-slate-900 p-3 space-y-2">
                   <p className="text-xs text-slate-300">
                     {entry.id} | {entry.time} | {entry.action} | {entry.method} |{' '}
-                    {entry.ok ? 'ok' : 'error'}
+                    {entry.ok ? '成功' : '错误'}
                   </p>
                   {!entry.ok && entry.error && <p className="text-xs text-rose-300">{entry.error}</p>}
                   <details>
-                    <summary className="cursor-pointer text-xs text-slate-300">request</summary>
+                    <summary className="cursor-pointer text-xs text-slate-300">请求</summary>
                     <pre className="text-xs overflow-auto">{pretty(entry.request)}</pre>
                   </details>
                   <details>
-                    <summary className="cursor-pointer text-xs text-slate-300">response</summary>
+                    <summary className="cursor-pointer text-xs text-slate-300">响应</summary>
                     <pre className="text-xs overflow-auto">{pretty(entry.response)}</pre>
                   </details>
                 </div>
@@ -1804,12 +1817,12 @@ export default function App() {
           </>
         ) : (
           <section className="rounded-lg border border-slate-800 bg-slate-900/70 p-4 md:p-6 space-y-4">
-            <h2 className="text-lg font-medium">Legacy Inbound</h2>
-            <p className="text-sm text-slate-400">Recovered inbound key form area (coexists with S5 Console).</p>
+            <h2 className="text-lg font-medium">传统入库</h2>
+            <p className="text-sm text-slate-400">已恢复入库关键表单区（与 S5 控制台并存）。</p>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div className="space-y-2">
-                <label className="text-sm text-slate-300">receipt_photo upload</label>
+                <label className="text-sm text-slate-300">receipt_photo 上传</label>
                 <input
                   ref={legacyFileInputRef}
                   type="file"
@@ -1821,27 +1834,27 @@ export default function App() {
                 <div
                   onDoubleClick={() => legacyFileInputRef.current?.click()}
                   className="rounded border border-slate-700 bg-slate-950 px-3 py-2 min-h-[42px] flex items-center justify-between gap-2 cursor-pointer"
-                  title="Double-click to choose photo"
+                  title="双击选择照片"
                 >
                   <span className="text-sm text-slate-300 truncate">
-                    {legacyReceiptPhoto || 'double-click to upload receipt photo'}
+                    {legacyReceiptPhoto || '双击上传收货照片'}
                   </span>
                   <button
                     type="button"
                     onClick={() => legacyFileInputRef.current?.click()}
                     className="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs"
                   >
-                    Choose
+                    选择
                   </button>
                 </div>
-                {legacyUploading && <p className="text-xs text-cyan-300">uploading...</p>}
+                {legacyUploading && <p className="text-xs text-cyan-300">上传中...</p>}
               </div>
               <div className="space-y-2">
-                <label className="text-sm text-slate-300">exception_reason (required if no photo)</label>
+                <label className="text-sm text-slate-300">exception_reason（无照片时必填）</label>
                 <input
                   value={legacyExceptionReason}
                   onChange={(e) => setLegacyExceptionReason(e.target.value)}
-                  placeholder="exception_reason (required if no photo)"
+                  placeholder="exception_reason（无照片时必填）"
                   className="rounded border border-amber-700 bg-slate-950 px-3 py-2"
                 />
               </div>
@@ -1851,49 +1864,49 @@ export default function App() {
               <input
                 value={legacyF01}
                 onChange={(e) => setLegacyF01(e.target.value)}
-                placeholder="f01 material (required)"
+                placeholder="f01 物料（必填）"
                 className="rounded border border-amber-700 bg-slate-950 px-3 py-2"
               />
               <input
                 value={legacyF02}
                 onChange={(e) => setLegacyF02(e.target.value)}
-                placeholder="f02 supplier (required)"
+                placeholder="f02 供应商（必填）"
                 className="rounded border border-amber-700 bg-slate-950 px-3 py-2"
               />
               <input
                 value={legacyF03}
                 onChange={(e) => setLegacyF03(e.target.value)}
-                placeholder="f03 invoice no"
+                placeholder="f03 发票号"
                 className="rounded border border-slate-700 bg-slate-950 px-3 py-2"
               />
               <input
                 value={legacyF04}
                 onChange={(e) => setLegacyF04(e.target.value)}
-                placeholder="f04 gross weight"
+                placeholder="f04 毛重"
                 className="rounded border border-slate-700 bg-slate-950 px-3 py-2"
               />
               <input
                 value={legacyF05}
                 onChange={(e) => setLegacyF05(e.target.value)}
-                placeholder="f05 package qty"
+                placeholder="f05 包数"
                 className="rounded border border-slate-700 bg-slate-950 px-3 py-2"
               />
               <input
                 value={legacyF06}
                 onChange={(e) => setLegacyF06(e.target.value)}
-                placeholder="f06 batch no"
+                placeholder="f06 批次号"
                 className="rounded border border-slate-700 bg-slate-950 px-3 py-2"
               />
               <input
                 value={legacyF07}
                 onChange={(e) => setLegacyF07(e.target.value)}
-                placeholder="f07 plate no"
+                placeholder="f07 车牌号"
                 className="rounded border border-slate-700 bg-slate-950 px-3 py-2"
               />
               <input
                 value={legacyF08}
                 onChange={(e) => setLegacyF08(e.target.value)}
-                placeholder="f08 location (required)"
+                placeholder="f08 库位（必填）"
                 className="rounded border border-amber-700 bg-slate-950 px-3 py-2"
               />
               <input
@@ -1905,19 +1918,19 @@ export default function App() {
               <input
                 value={legacyF10}
                 onChange={(e) => setLegacyF10(e.target.value)}
-                placeholder="f10 delivery weight / exception note"
+                placeholder="f10 送货重量 / 异常说明"
                 className="rounded border border-slate-700 bg-slate-950 px-3 py-2"
               />
               <input
                 value={legacyF11}
                 onChange={(e) => setLegacyF11(e.target.value)}
-                placeholder="f11 remarks"
+                placeholder="f11 备注"
                 className="rounded border border-slate-700 bg-slate-950 px-3 py-2"
               />
               <input
                 value={legacyF12}
                 onChange={(e) => setLegacyF12(e.target.value)}
-                placeholder="f12 external bag code"
+                placeholder="f12 外袋编码"
                 className="rounded border border-slate-700 bg-slate-950 px-3 py-2"
               />
               <select
@@ -1925,26 +1938,26 @@ export default function App() {
                 onChange={(e) => setLegacyF13(e.target.value)}
                 className="rounded border border-slate-700 bg-slate-950 px-3 py-2"
               >
-                <option value="">f13 source type</option>
+                <option value="">f13 来源类型</option>
                 <option value="新料">新料</option>
                 <option value="回料">回料</option>
               </select>
               <input
                 value={legacyF14}
                 onChange={(e) => setLegacyF14(e.target.value)}
-                placeholder="f14 regrind class"
+                placeholder="f14 回料等级"
                 className="rounded border border-slate-700 bg-slate-950 px-3 py-2"
               />
               <input
                 value={legacyF15}
                 onChange={(e) => setLegacyF15(e.target.value)}
-                placeholder="f15 internal batch"
+                placeholder="f15 内部批次"
                 className="rounded border border-slate-700 bg-slate-950 px-3 py-2"
               />
               <input
                 value={legacyF16}
                 onChange={(e) => setLegacyF16(e.target.value)}
-                placeholder="f16 pkg track"
+                placeholder="f16 包装追踪"
                 className="rounded border border-slate-700 bg-slate-950 px-3 py-2"
               />
               <input
@@ -1961,23 +1974,23 @@ export default function App() {
                 disabled={legacyStatus === 'loading'}
                 className="rounded border border-cyan-700 bg-cyan-950/40 px-3 py-2 text-sm disabled:opacity-50"
               >
-                {legacyStatus === 'loading' ? 'Submitting...' : 'Submit Legacy Inbound'}
+                {legacyStatus === 'loading' ? '提交中...' : '提交传统入库'}
               </button>
               <span className={`px-2 py-1 rounded border text-xs ${statusBadge(legacyStatus)}`}>
-                status: {legacyStatus}
+                状态：{statusText(legacyStatus)}
               </span>
-              <span className="text-xs text-slate-400">draft: {legacyDraftName || 'none'}</span>
+              <span className="text-xs text-slate-400">草稿：{legacyDraftName || '无'}</span>
             </div>
 
             {legacyError && <p className="text-sm text-rose-300">{legacyError}</p>}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div className="rounded border border-slate-800 bg-slate-950 p-3">
-                <p className="text-xs text-slate-400 mb-2">vision response</p>
+                <p className="text-xs text-slate-400 mb-2">识别响应</p>
                 <pre className="text-xs overflow-auto">{pretty(legacyVision)}</pre>
               </div>
               <div className="rounded border border-slate-800 bg-slate-950 p-3">
-                <p className="text-xs text-slate-400 mb-2">meta response</p>
+                <p className="text-xs text-slate-400 mb-2">元信息响应</p>
                 <pre className="text-xs overflow-auto">{pretty(legacyMeta)}</pre>
               </div>
             </div>
