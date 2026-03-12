@@ -1184,6 +1184,11 @@ export default function App() {
     if (legacyF15.trim()) overrides.f15 = legacyF15.trim();
     if (legacyF16.trim()) overrides.f16 = legacyF16.trim();
     if (legacyF17.trim()) overrides.f17 = legacyF17.trim();
+    const requestPayload: JsonRecord = {
+      receipt_photo: receiptPhoto,
+      exception_reason: exceptionReason,
+      overrides,
+    };
 
     setLegacyStatus('loading');
     setLegacyError('');
@@ -1192,12 +1197,16 @@ export default function App() {
     setLegacyMeta(null);
 
     try {
-      const result = await callLegacyInbound({
-        receipt_photo: receiptPhoto,
-        exception_reason: exceptionReason,
-        overrides,
-      });
+      const result = await callLegacyInbound(requestPayload);
       const dataRecord = asRecord(result.data);
+      appendEvidence(
+        'Legacy inbound submit',
+        'vision_to_draft.create_rm_inbound_draft_from_receipt',
+        result.ok,
+        requestPayload,
+        result.data,
+        result.ok ? '' : result.errorMessage
+      );
 
       if (!result.ok) {
         setLegacyStatus('error');
@@ -1217,8 +1226,17 @@ export default function App() {
       setLegacyVision(dataRecord?.vision ?? null);
       setLegacyMeta(dataRecord?.meta ?? null);
     } catch (err) {
+      const message = err instanceof Error ? err.message : '传统入库提交失败';
+      appendEvidence(
+        'Legacy inbound submit',
+        'vision_to_draft.create_rm_inbound_draft_from_receipt',
+        false,
+        requestPayload,
+        { error: message },
+        message
+      );
       setLegacyStatus('error');
-      setLegacyError(err instanceof Error ? err.message : '传统入库提交失败');
+      setLegacyError(message);
     }
   }
 
